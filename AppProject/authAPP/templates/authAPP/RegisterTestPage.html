@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Registration Test</title>
+</head>
+<body>
+    <h2>User Registration Form</h2>
+    <form action="{% url 'user_register' %}" method="post">
+
+        <!-- CSRF Token -->
+        <!-- 注意: 在实际部署中，应该使用Django模板标签来生成CSRF令牌。这里为了简化，我们省略了这一步。 -->
+        <input type="hidden" name="csrfmiddlewaretoken" value="YourCSRFTokenHere">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div>
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <div>
+            <button type="submit">Register</button>
+        </div>
+    </form>
+</body>
+</html>

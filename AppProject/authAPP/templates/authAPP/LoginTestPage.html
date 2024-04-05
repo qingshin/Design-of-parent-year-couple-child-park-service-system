@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Test Page</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+<body>
+
+<h2>Login Form</h2>
+
+<form id="loginForm">
+    <label for="username">Username:</label><br>
+    <input type="text" id="username" name="username"><br>
+    <label for="password">Password:</label><br>
+    <input type="password" id="password" name="password"><br><br>
+    <input type="button" value="Login" id="loginButton">
+</form>
+
+<script>
+$(document).ready(function(){
+    $("#loginButton").click(function(){
+        var username = $("#username").val();
+        var password = $("#password").val();
+        $.ajax({
+            type: "POST",
+            url: "/authAPP/login/",  // 确保这个URL与您的Django视图对应的URL匹配
+            data: {
+                username: username,
+                password: password
+            },
+            success: function(response){
+                // 这里的response是从服务器返回的数据
+                console.log(response); // 现在可以在这里打印response来查看服务器的响应
+                alert(response.message); // 显示来自服务器的消息
+            },
+            error: function(xhr, textStatus, errorThrown){
+                // 如果发生错误，xhr.responseText将包含服务器的响应文本
+                console.log(xhr.responseText); // 打印错误详情
+                alert("Error: " + xhr.responseText); // 显示错误信息
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>
