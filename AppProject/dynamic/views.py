@@ -1,15 +1,15 @@
 from django.shortcuts import render
+
 """
 包含应用程序的视图函数，处理请求并返回响应，实现应用程序的业务逻辑。
 """
 # Create your views here.
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
+from django.http import JsonResponse, HttpResponseNotFound, HttpResponseForbidden
 from django import forms
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from .models import Post, Media
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 
 class PostForm(forms.ModelForm):
@@ -54,46 +54,94 @@ def publish_content(request):
     return JsonResponse({'message': 'Content published successfully.', 'post_id': post.id})
 
 
-# @csrf_exempt
-# def edit_content(request, content_id):
-#     if request.method == 'POST':
-#         title = request.POST.get('title')
-#         body = request.POST.get('body')
-#
-#         # 假设这里是编辑内容的逻辑，更新对应内容的信息
-#         for content in content_data:
-#             if content['id'] == content_id:
-#                 content['title'] = title
-#                 content['body'] = body
-#                 return JsonResponse({'message': 'Content edited successfully', 'content': content})
-#
-#         return JsonResponse({'error': 'Content not found'}, status=404)
-#     else:
-#         return JsonResponse({'error': 'Method not allowed'}, status=405)
-#
-#
-# @csrf_exempt
-# def delete_content(request, content_id):
-#     if request.method == 'POST':
-#         for i, content in enumerate(content_data):
-#             if content['id'] == content_id:
-#                 del content_data[i]
-#                 return JsonResponse({'message': 'Content deleted successfully'})
-#
-#         return JsonResponse({'error': 'Content not found'}, status=404)
-#     else:
-#         return JsonResponse({'error': 'Method not allowed'}, status=405)
-#
-#
-# def list_content(request):
-#     return JsonResponse(content_data)
-#
-#
-# def get_content_detail(request, content_id):
-#     for content in content_data:
-#         if content['id'] == content_id:
-#             return JsonResponse(content)
-#     return JsonResponse({'error': 'Content not found'}, status=404)
+@login_required
+@require_http_methods(["POST"])
+def edit_content(request, content_id):  # 修改参数名为content_id以匹配URL模式
+    # 尝试获取要编辑的Post实例
+    try:
+        post = Post.objects.get(id=content_id, user=request.user)
+    except Post.DoesNotExist:
+        return JsonResponse({'message': 'Post not found or access denied.'}, status=404)
+
+    # 获取更新的内容
+    content = request.POST.get('content', '')
+    if content:
+        post.content = content
+        post.save()
+        return JsonResponse({'message': 'Content updated successfully.'})
+    else:
+        return JsonResponse({'message': 'No content provided.'}, status=400)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_content(request, content_id):
+    try:
+        post = Post.objects.get(id=content_id)
+    except Post.DoesNotExist:
+        return HttpResponseNotFound({'message': 'Post not found.'})
+
+    # 检查当前登录用户是否为动态的发布者
+    if post.user != request.user:
+        return HttpResponseForbidden({'message': 'You do not have permission to delete this post.'})
+
+    post.delete()
+    return JsonResponse({'message': 'Post deleted successfully.'})
+
+
+def list_content(request):
+    posts_list = Post.objects.all().order_by('-created_at')  # 获取所有动态并按创建时间降序排序
+    page = request.GET.get('page', 1)  # 从请求的查询参数中获取页码
+    paginator = Paginator(posts_list, 10)  # 每页显示10条动态
+
+    try:
+        posts = paginator.page(page)
+    except PageNotAnInteger:
+        # 如果页码不是整数，展示第一页
+        posts = paginator.page(1)
+    except EmptyPage:
+        # 如果页码超出范围，展示最后一页
+        posts = paginator.page(paginator.num_pages)
+
+    # 将动态数据及其关联的媒体文件序列化为JSON格式
+    posts_data = []
+    for post in posts:
+        media_files = Media.objects.filter(post=post).values('media_type', 'file_path')
+        post_data = {
+            'id': post.id,
+            'user': post.user.username,
+            'content': post.content,
+            'created_at': post.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'media': list(media_files)
+        }
+        posts_data.append(post_data)
+
+    return JsonResponse({'posts': posts_data, 'page': int(page), 'pages': paginator.num_pages}, safe=False)
+
+
+def get_content_detail(request, content_id):
+    try:
+        # 尝试获取指定ID的动态
+        post = Post.objects.get(id=content_id)
+    except Post.DoesNotExist:
+        # 如果动态不存在，返回404错误
+        return HttpResponseNotFound({'message': 'Post not found.'})
+
+    # 获取与动态相关联的媒体文件信息
+    media_files = Media.objects.filter(post=post).values('media_type', 'file_path')
+
+    # 构建动态的详细信息
+    post_detail = {
+        'id': post.id,
+        'user': post.user.username,
+        'content': post.content,
+        'created_at': post.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        'media': list(media_files)
+    }
+
+    # 如果有其他需要包含的信息，比如评论、点赞数等，也可以在这里添加
+
+    return JsonResponse(post_detail)
 #
 #
 # # 模拟评论数据，实际情况应该从数据库或其他数据源获取

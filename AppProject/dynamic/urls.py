@@ -7,10 +7,10 @@ from . import views
 
 urlpatterns = [
     path('publish_content/', views.publish_content, name='publish_content'),
-    # path('edit_content/<int:content_id>/', views.edit_content, name='edit_content'),
-    # path('delete_content/<int:content_id>/', views.delete_content, name='delete_content'),
-    # path('list_content/', views.list_content, name='list_content'),
-    # path('get_content_detail/<int:content_id>/', views.get_content_detail, name='get_content_detail'),
+    path('edit_content/<int:content_id>/', views.edit_content, name='edit_content'),
+    path('delete_content/<int:content_id>/', views.delete_content, name='delete_content'),
+    path('list_content/', views.list_content, name='list_content'),
+    path('content_detail/<int:content_id>/', views.get_content_detail, name='get_content_detail'),
     # path('post_comment/', views.post_comment, name='post_comment'),
     # path('get_comment_list/', views.get_comment_list, name='get_comment_list'),
     # path('like_comment/<int:comment_id>/', views.like_comment, name='like_comment'),
