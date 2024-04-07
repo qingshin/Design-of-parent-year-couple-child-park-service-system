@@ -6,7 +6,8 @@ from django.db import models
 # Create your models here.
 from django.conf import settings
 from django.db import models
-
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 """
 首先，我们定义一个Post模型，它将包含动态的基本信息，如文本内容、发布时间和关联的用户。
 为了支持未来可能的多媒体内容，我们可以创建一个Media模型，用于存储媒体文件的相关信息，如文件类型、文件路径等。
@@ -61,15 +62,31 @@ class CommentLike(models.Model):
 
 
 class Notification(models.Model):
+    """
+    动态通知系统
+    """
     # 通知类型，例如：'like'、'comment'等
     type = models.CharField(max_length=20)
     # 通知接收者
     to_user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='notifications', on_delete=models.CASCADE)
+    # 发起通知的用户
+    from_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+
     # 通知创建时间
     created_at = models.DateTimeField(auto_now_add=True)
     # 是否已读
     is_read = models.BooleanField(default=False)
-    # 与通知相关联的评论
-    comment = models.ForeignKey('Comment', on_delete=models.CASCADE, null=True, blank=True)
-    # 发起通知的用户
-    from_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+
+    # 以下字段用于实现通用关联
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True)  # 允许object_id为空
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+
+class PostLike(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='post_likes')
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='likes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'post')  # 确保一个用户对同一动态的点赞是唯一的

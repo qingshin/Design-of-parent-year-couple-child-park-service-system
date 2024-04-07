@@ -8,9 +8,10 @@ from django.http import JsonResponse, HttpResponseNotFound, HttpResponseForbidde
 from django import forms
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
-from .models import Post, Media, Comment, CommentLike, Notification
+from .models import Post, Media, Comment, CommentLike, Notification, PostLike
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.contenttypes.models import ContentType
 
 
 class PostForm(forms.ModelForm):
@@ -181,12 +182,15 @@ def like_comment(request, comment_id):
     # 创建喜欢
     CommentLike.objects.create(user=request.user, comment=comment)
 
+    # 获取评论的ContentType
+    content_type = ContentType.objects.get_for_model(comment)
     # 创建通知
     Notification.objects.create(
         type='like',
         to_user=comment.user,
         from_user=request.user,
-        comment=comment
+        content_type=content_type,
+        object_id=comment.id
     )
 
     return JsonResponse({'message': 'Comment liked successfully.'})
@@ -208,6 +212,63 @@ def unlike_comment(request, comment_id):
         return JsonResponse({'message': 'Comment unliked successfully.'})
     else:
         return JsonResponse({'message': 'You have not liked this comment.'}, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def like_post(request, post_id):
+    """
+    点赞喜欢的动态
+    :param request:
+    :param post_id:
+    :return:
+    """
+    try:
+        post = Post.objects.get(id=post_id)
+    except Post.DoesNotExist:
+        return JsonResponse({'message': 'Post not found.'}, status=404)
+
+    if PostLike.objects.filter(user=request.user, post=post).exists():
+        return JsonResponse({'message': 'You already liked this post.'}, status=400)
+
+    # 创建点赞记录
+    PostLike.objects.create(user=request.user, post=post)
+
+    # 获取动态的ContentType
+    content_type = ContentType.objects.get_for_model(post)
+    # 创建通知
+    Notification.objects.create(
+        type='like',
+        to_user=post.user,
+        from_user=request.user,
+        content_type=content_type,
+        object_id=post.id
+    )
+
+    return JsonResponse({'message': 'Post liked successfully.'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def unlike_post(request, post_id):
+    """
+    取消对动态的点赞
+    :param request:
+    :param post_id:
+    :return:
+    """
+    try:
+        post = Post.objects.get(id=post_id)
+    except Post.DoesNotExist:
+        return JsonResponse({'message': 'Post not found.'}, status=404)
+
+    like_instance = PostLike.objects.filter(user=request.user, post=post).first()
+    if like_instance:
+        like_instance.delete()
+        return JsonResponse({'message': 'Post unliked successfully.'})
+    else:
+        return JsonResponse({'message': 'You have not liked this post.'}, status=400)
+
 #
 # @csrf_exempt
 # def follow_user(request, user_id):

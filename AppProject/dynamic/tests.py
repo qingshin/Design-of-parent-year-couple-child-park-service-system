@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.contrib.contenttypes.models import ContentType
 
 """
 包含应用程序的单元测试代码，用于测试应用程序的功能和逻辑。
@@ -8,7 +8,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
-from .models import Post, Media, Comment, CommentLike
+from .models import Post, Media, Comment, CommentLike, PostLike, Notification
 from django.utils import timezone
 
 User = get_user_model()  # 获取当前项目使用的用户模型
@@ -203,44 +203,35 @@ class PublishCommentTests(TestCase):
 class LikeCommentTests(TestCase):
 
     def setUp(self):
-        # 创建测试客户端
         self.client = Client()
-        # 使用自定义用户模型创建测试用户
-        self.user1 = User.objects.create_user(username='user1', email='user1@example.com', password='password1')
-        self.user2 = User.objects.create_user(username='user2', email='user2@example.com', password='password2')
-        # 创建一个测试动态
-        self.post = Post.objects.create(user=self.user1, content='Test Post')
-        # 创建一个测试评论
-        self.comment = Comment.objects.create(user=self.user1, post=self.post, content='Test Comment')
-        # 设置点赞评论的URL
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
+        self.post = Post.objects.create(user=self.user, content='Test Post')
+        self.comment = Comment.objects.create(user=self.user, post=self.post, content='Test Comment')
         self.like_comment_url = reverse('like_comment', kwargs={'comment_id': self.comment.id})
 
     def test_like_comment_success(self):
-        # 测试用户成功点赞评论
-        self.client.login(username='user2', password='password2')
+        self.client.login(username='testuser', password='12345')
         response = self.client.post(self.like_comment_url)
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(CommentLike.objects.filter(user=self.user2, comment=self.comment).exists())
+        self.assertTrue(CommentLike.objects.filter(user=self.user, comment=self.comment).exists())
+        self.assertTrue(
+            Notification.objects.filter(to_user=self.user, content_type=ContentType.objects.get_for_model(Comment),
+                                        object_id=self.comment.id).exists())
 
-    def test_like_comment_nonexistent(self):
-        # 测试点赞一个不存在的评论
-        self.client.login(username='user1', password='password1')
-        nonexistent_comment_url = reverse('like_comment', kwargs={'comment_id': 999})
-        response = self.client.post(nonexistent_comment_url)
-        self.assertEqual(response.status_code, 404)
-
-    def test_like_comment_repeat(self):
-        # 测试用户重复点赞同一评论
-        self.client.login(username='user1', password='password1')
-        CommentLike.objects.create(user=self.user1, comment=self.comment)
+    def test_like_comment_already_liked(self):
+        CommentLike.objects.create(user=self.user, comment=self.comment)
+        self.client.login(username='testuser', password='12345')
         response = self.client.post(self.like_comment_url)
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(CommentLike.objects.filter(user=self.user1, comment=self.comment).count(), 1)
+
+    def test_like_comment_not_found(self):
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(reverse('like_comment', kwargs={'comment_id': 999}))
+        self.assertEqual(response.status_code, 404)
 
     def test_like_comment_without_login(self):
-        # 测试未登录用户尝试点赞评论
         response = self.client.post(self.like_comment_url)
-        self.assertNotEqual(response.status_code, 200)  # 期望不成功，具体状态码取决于你的登录要求
+        self.assertNotEqual(response.status_code, 200)
 
 
 class UnlikeCommentTests(TestCase):
@@ -274,4 +265,70 @@ class UnlikeCommentTests(TestCase):
 
     def test_unlike_comment_without_login(self):
         response = self.client.post(self.unlike_comment_url)
+        self.assertNotEqual(response.status_code, 200)  # 期望不成功，具体状态码取决于你的登录要求
+
+
+class LikePostTests(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
+        self.post = Post.objects.create(user=self.user, content='Test Post')
+        self.like_post_url = reverse('like_post', kwargs={'post_id': self.post.id})
+
+    def test_like_post_success(self):
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(self.like_post_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(PostLike.objects.filter(user=self.user, post=self.post).exists())
+        self.assertTrue(
+            Notification.objects.filter(to_user=self.user, content_type=ContentType.objects.get_for_model(Post),
+                                        object_id=self.post.id).exists())
+
+    def test_like_post_already_liked(self):
+        PostLike.objects.create(user=self.user, post=self.post)
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(self.like_post_url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_like_post_not_found(self):
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(reverse('like_post', kwargs={'post_id': 999}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_like_post_without_login(self):
+        response = self.client.post(self.like_post_url)
+        self.assertNotEqual(response.status_code, 200)
+
+
+class UnlikePostTests(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
+        self.post = Post.objects.create(user=self.user, content='Test Post')
+        self.like_instance = PostLike.objects.create(user=self.user, post=self.post)
+        self.unlike_post_url = reverse('unlike_post', kwargs={'post_id': self.post.id})
+
+    def test_unlike_post_success(self):
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(self.unlike_post_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PostLike.objects.filter(user=self.user, post=self.post).exists())
+
+    def test_unlike_post_not_liked(self):
+        # 先删除已有的点赞记录，模拟未点赞的情况
+        self.like_instance.delete()
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(self.unlike_post_url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_unlike_post_nonexistent(self):
+        self.client.login(username='testuser', password='12345')
+        nonexistent_post_url = reverse('unlike_post', kwargs={'post_id': 999})
+        response = self.client.post(nonexistent_post_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_unlike_post_without_login(self):
+        response = self.client.post(self.unlike_post_url)
         self.assertNotEqual(response.status_code, 200)  # 期望不成功，具体状态码取决于你的登录要求
