@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from .models import Post, Media
+from .models import Post, Media, Comment
 from django.utils import timezone
 
 User = get_user_model()  # 获取当前项目使用的用户模型
@@ -162,3 +162,40 @@ class GetContentDetailTests(TestCase):
         self.assertEqual(response.json()['content'], 'A detailed post')
         self.assertTrue('media' in response.json())
         self.assertEqual(len(response.json()['media']), 1)
+
+
+class PublishCommentTests(TestCase):
+
+    def setUp(self):
+        # 创建测试客户端
+        self.client = Client()
+        # 创建测试用户和登录
+        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.client.login(username='testuser', password='testpassword')
+        # 创建一个测试动态
+        self.post = Post.objects.create(user=self.user, content='Test Post')
+        # 设置发表评论的URL
+        self.publish_comment_url = reverse('publish_comment', kwargs={'post_id': self.post.id})
+
+    def test_publish_comment_success(self):
+        # 测试成功发表评论
+        response = self.client.post(self.publish_comment_url, {'content': 'Test Comment'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Comment.objects.filter(content='Test Comment').exists())
+
+    def test_publish_comment_to_nonexistent_post(self):
+        # 测试对不存在的动态发表评论
+        nonexistent_post_url = reverse('publish_comment', kwargs={'post_id': 999})
+        response = self.client.post(nonexistent_post_url, {'content': 'Test Comment'})
+        self.assertEqual(response.status_code, 404)
+
+    def test_publish_comment_with_empty_content(self):
+        # 测试发表空评论
+        response = self.client.post(self.publish_comment_url, {'content': ''})
+        self.assertEqual(response.status_code, 400)
+
+    def test_publish_comment_without_login(self):
+        # 测试未登录用户尝试发表评论
+        self.client.logout()
+        response = self.client.post(self.publish_comment_url, {'content': 'Test Comment'})
+        self.assertEqual(response.status_code, 302)  # 期望被重定向到登录页面

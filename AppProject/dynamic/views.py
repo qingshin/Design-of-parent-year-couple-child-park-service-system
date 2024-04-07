@@ -8,8 +8,9 @@ from django.http import JsonResponse, HttpResponseNotFound, HttpResponseForbidde
 from django import forms
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
-from .models import Post, Media
+from .models import Post, Media, Comment
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.views.decorators.csrf import csrf_exempt
 
 
 class PostForm(forms.ModelForm):
@@ -142,34 +143,28 @@ def get_content_detail(request, content_id):
     # 如果有其他需要包含的信息，比如评论、点赞数等，也可以在这里添加
 
     return JsonResponse(post_detail)
-#
-#
-# # 模拟评论数据，实际情况应该从数据库或其他数据源获取
-# comment_data = [
-#     {'id': 1, 'user_id': 1, 'content': 'This is a comment'},
-#     {'id': 2, 'user_id': 2, 'content': 'Another comment'},
-#     # 可以根据实际情况添加更多评论信息
-# ]
-#
-#
-# @csrf_exempt
-# def post_comment(request):
-#     if request.method == 'POST':
-#         user_id = request.POST.get('user_id')
-#         content = request.POST.get('content')
-#
-#         # 假设这里是发表评论的逻辑，可以将评论信息保存到数据库中
-#         new_comment = {'id': len(comment_data) + 1, 'user_id': user_id, 'content': content}
-#         comment_data.append(new_comment)
-#
-#         return JsonResponse({'message': 'Comment posted successfully', 'comment': new_comment})
-#     else:
-#         return JsonResponse({'error': 'Method not allowed'}, status=405)
-#
-#
-# def get_comment_list(request):
-#     return JsonResponse(comment_data)
-#
+
+
+@login_required
+@require_http_methods(["POST"])
+@csrf_exempt
+def publish_comment(request, post_id):
+    # 确保动态存在
+    try:
+        post = Post.objects.get(id=post_id)
+    except Post.DoesNotExist:
+        return JsonResponse({'message': 'Post not found.'}, status=404)
+
+    # 获取评论内容
+    content = request.POST.get('content', '').strip()
+    if not content:
+        return JsonResponse({'message': 'Comment content cannot be empty.'}, status=400)
+
+    # 创建评论实例
+    comment = Comment.objects.create(content=content, post=post, user=request.user)
+
+    return JsonResponse({'message': 'Comment published successfully.', 'comment_id': comment.id})
+
 #
 # @csrf_exempt
 # def like_comment(request, comment_id):
