@@ -62,7 +62,7 @@ class UserLoginTestCase(TestCase):
     def setUp(self):
         # 创建一个测试用户
         User = get_user_model()
-        self.user = User.objects.create_user(username='testuser', password='666666')
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='666666')
         self.login_url = reverse('user_login')  # 假设你的登录视图的URL名称为'user_login'
 
     def test_login_success(self):
@@ -87,10 +87,10 @@ class UserLogoutTest(TestCase):
     def setUp(self):
         # 创建一个用户用于登录和登出测试
         User_test = get_user_model()  # 使用get_user_model()函数获取默认的用户模型类
-        self.user = User_test.objects.create_user(username='李福强', password='123456')
+        self.user = User_test.objects.create_user(username='testuser',email='testuser@example.com', password='123456')
         self.client = Client()
         # 登录用户
-        self.client.login(username='李福强', password='123456')
+        self.client.login(username='testuser', password='123456')
 
     def test_logout(self):
         # 获取登出视图的URL
@@ -112,7 +112,7 @@ class GetUserInfoTestCase(TestCase):
         # 创建两个测试用户
         User = get_user_model()
         self.user1 = User.objects.create_user(username='不存在的用户', email='00@qq.com', password='123456')
-        self.user2 = User.objects.create_user(username='testuser', email='11@qq.com', password='666666',
+        self.user2 = User.objects.create_user(username='testuser', email='testuser@example.com', password='666666',
                                               is_staff=True)
 
     def test_get_user_info_success(self):
