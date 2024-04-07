@@ -7,9 +7,8 @@ from django.test import TestCase
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from .models import Post, Media, Comment
+from .models import Post, Media, Comment, CommentLike
 from django.utils import timezone
 
 User = get_user_model()  # 获取当前项目使用的用户模型
@@ -19,7 +18,7 @@ class PublishContentTests(TestCase):
 
     def setUp(self):
         # 创建一个用户用于测试
-        self.user = User.objects.create_user(username='testuser', password='12345')
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
         self.client = Client()
         self.client.login(username='testuser', password='12345')
         self.publish_url = reverse('publish_content')  # 确保你已经在urls.py中为publish_content视图设置了名为'publish_content'的URL
@@ -110,7 +109,7 @@ class ListContentTests(TestCase):
         self.client = Client()
         self.list_content_url = reverse('list_content')
         # 创建测试用户
-        self.user = User.objects.create_user(username='testuser', password='12345')
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
         # 创建测试动态和媒体文件
         for i in range(15):  # 创建15个动态以测试分页
             post = Post.objects.create(user=self.user, content=f'Post {i}', created_at=timezone.now())
@@ -148,7 +147,7 @@ class GetContentDetailTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username='testuser', password='12345')
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
         self.post = Post.objects.create(user=self.user, content='A detailed post', created_at=timezone.now())
         Media.objects.create(post=self.post, media_type='image', file_path='/path/to/image.jpg')
         self.detail_url = reverse('get_content_detail', kwargs={'content_id': self.post.id})
@@ -170,7 +169,7 @@ class PublishCommentTests(TestCase):
         # 创建测试客户端
         self.client = Client()
         # 创建测试用户和登录
-        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='testpassword')
         self.client.login(username='testuser', password='testpassword')
         # 创建一个测试动态
         self.post = Post.objects.create(user=self.user, content='Test Post')
@@ -199,3 +198,80 @@ class PublishCommentTests(TestCase):
         self.client.logout()
         response = self.client.post(self.publish_comment_url, {'content': 'Test Comment'})
         self.assertEqual(response.status_code, 302)  # 期望被重定向到登录页面
+
+
+class LikeCommentTests(TestCase):
+
+    def setUp(self):
+        # 创建测试客户端
+        self.client = Client()
+        # 使用自定义用户模型创建测试用户
+        self.user1 = User.objects.create_user(username='user1', email='user1@example.com', password='password1')
+        self.user2 = User.objects.create_user(username='user2', email='user2@example.com', password='password2')
+        # 创建一个测试动态
+        self.post = Post.objects.create(user=self.user1, content='Test Post')
+        # 创建一个测试评论
+        self.comment = Comment.objects.create(user=self.user1, post=self.post, content='Test Comment')
+        # 设置点赞评论的URL
+        self.like_comment_url = reverse('like_comment', kwargs={'comment_id': self.comment.id})
+
+    def test_like_comment_success(self):
+        # 测试用户成功点赞评论
+        self.client.login(username='user2', password='password2')
+        response = self.client.post(self.like_comment_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(CommentLike.objects.filter(user=self.user2, comment=self.comment).exists())
+
+    def test_like_comment_nonexistent(self):
+        # 测试点赞一个不存在的评论
+        self.client.login(username='user1', password='password1')
+        nonexistent_comment_url = reverse('like_comment', kwargs={'comment_id': 999})
+        response = self.client.post(nonexistent_comment_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_like_comment_repeat(self):
+        # 测试用户重复点赞同一评论
+        self.client.login(username='user1', password='password1')
+        CommentLike.objects.create(user=self.user1, comment=self.comment)
+        response = self.client.post(self.like_comment_url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(CommentLike.objects.filter(user=self.user1, comment=self.comment).count(), 1)
+
+    def test_like_comment_without_login(self):
+        # 测试未登录用户尝试点赞评论
+        response = self.client.post(self.like_comment_url)
+        self.assertNotEqual(response.status_code, 200)  # 期望不成功，具体状态码取决于你的登录要求
+
+
+class UnlikeCommentTests(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='testuser', email='testuser@example.com', password='12345')
+        self.post = Post.objects.create(user=self.user, content='Test Post')
+        self.comment = Comment.objects.create(user=self.user, post=self.post, content='Test Comment')
+        self.like_comment = CommentLike.objects.create(user=self.user, comment=self.comment)
+        self.unlike_comment_url = reverse('unlike_comment', kwargs={'comment_id': self.comment.id})
+
+    def test_unlike_comment_success(self):
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(self.unlike_comment_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(CommentLike.objects.filter(user=self.user, comment=self.comment).exists())
+
+    def test_unlike_comment_not_liked(self):
+        # 先删除已有的点赞记录，模拟未点赞的情况
+        self.like_comment.delete()
+        self.client.login(username='testuser', password='12345')
+        response = self.client.post(self.unlike_comment_url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_unlike_comment_nonexistent(self):
+        self.client.login(username='testuser', password='12345')
+        nonexistent_comment_url = reverse('unlike_comment', kwargs={'comment_id': 999})
+        response = self.client.post(nonexistent_comment_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_unlike_comment_without_login(self):
+        response = self.client.post(self.unlike_comment_url)
+        self.assertNotEqual(response.status_code, 200)  # 期望不成功，具体状态码取决于你的登录要求

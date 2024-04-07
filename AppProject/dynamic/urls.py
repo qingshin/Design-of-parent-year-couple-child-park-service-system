@@ -12,7 +12,9 @@ urlpatterns = [
     path('list_content/', views.list_content, name='list_content'),
     path('content_detail/<int:content_id>/', views.get_content_detail, name='get_content_detail'),
     path('publish_comment/<int:post_id>/', views.publish_comment, name='publish_comment'),
-    # path('like_comment/<int:comment_id>/', views.like_comment, name='like_comment'),
+    path('like_comment/<int:comment_id>/', views.like_comment, name='like_comment'),
+    path('unlike_comment/<int:comment_id>/', views.unlike_comment, name='unlike_comment'),
+
     # path('follow_user/<int:user_id>/', views.follow_user, name='follow_user'),
     # path('unfollow_user/<int:user_id>/', views.unfollow_user, name='unfollow_user'),
     # path('search/', views.search, name='search'),

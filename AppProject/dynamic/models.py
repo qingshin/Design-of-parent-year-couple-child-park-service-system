@@ -49,3 +49,27 @@ class Comment(models.Model):
 
     def __str__(self):
         return f'Comment by {self.user.username} on {self.post.id}'
+
+
+class CommentLike(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='comment_likes')
+    comment = models.ForeignKey('Comment', on_delete=models.CASCADE, related_name='likes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'comment')  # 确保一个用户对同一评论的喜欢是唯一的
+
+
+class Notification(models.Model):
+    # 通知类型，例如：'like'、'comment'等
+    type = models.CharField(max_length=20)
+    # 通知接收者
+    to_user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='notifications', on_delete=models.CASCADE)
+    # 通知创建时间
+    created_at = models.DateTimeField(auto_now_add=True)
+    # 是否已读
+    is_read = models.BooleanField(default=False)
+    # 与通知相关联的评论
+    comment = models.ForeignKey('Comment', on_delete=models.CASCADE, null=True, blank=True)
+    # 发起通知的用户
+    from_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='+')

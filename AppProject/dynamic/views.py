@@ -8,7 +8,7 @@ from django.http import JsonResponse, HttpResponseNotFound, HttpResponseForbidde
 from django import forms
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
-from .models import Post, Media, Comment
+from .models import Post, Media, Comment, CommentLike, Notification
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.views.decorators.csrf import csrf_exempt
 
@@ -165,20 +165,49 @@ def publish_comment(request, post_id):
 
     return JsonResponse({'message': 'Comment published successfully.', 'comment_id': comment.id})
 
-#
-# @csrf_exempt
-# def like_comment(request, comment_id):
-#     if request.method == 'POST':
-#         # 假设这里是点赞评论的逻辑
-#         for comment in comment_data:
-#             if comment['id'] == comment_id:
-#                 # 假设这里是点赞的处理，可以更新数据库中对应评论的点赞数等信息
-#                 return JsonResponse({'message': 'Comment liked successfully', 'comment': comment})
-#
-#         return JsonResponse({'error': 'Comment not found'}, status=404)
-#     else:
-#         return JsonResponse({'error': 'Method not allowed'}, status=405)
-#
+
+@login_required
+@require_http_methods(["POST"])
+def like_comment(request, comment_id):
+    try:
+        comment = Comment.objects.get(id=comment_id)
+    except Comment.DoesNotExist:
+        return JsonResponse({'message': 'Comment not found.'}, status=404)
+
+    # 检查用户是否已经喜欢了这条评论
+    if CommentLike.objects.filter(user=request.user, comment=comment).exists():
+        return JsonResponse({'message': 'You already liked this comment.'}, status=400)
+
+    # 创建喜欢
+    CommentLike.objects.create(user=request.user, comment=comment)
+
+    # 创建通知
+    Notification.objects.create(
+        type='like',
+        to_user=comment.user,
+        from_user=request.user,
+        comment=comment
+    )
+
+    return JsonResponse({'message': 'Comment liked successfully.'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def unlike_comment(request, comment_id):
+    try:
+        # 尝试获取指定ID的评论
+        comment = Comment.objects.get(id=comment_id)
+    except Comment.DoesNotExist:
+        return JsonResponse({'message': 'Comment not found.'}, status=404)
+
+    # 尝试获取并删除点赞记录
+    like_instance = CommentLike.objects.filter(user=request.user, comment=comment).first()
+    if like_instance:
+        like_instance.delete()
+        return JsonResponse({'message': 'Comment unliked successfully.'})
+    else:
+        return JsonResponse({'message': 'You have not liked this comment.'}, status=400)
 #
 # @csrf_exempt
 # def follow_user(request, user_id):
